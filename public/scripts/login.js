@@ -2,6 +2,7 @@ class LoginApp {
   constructor() {
     this.eauthButton = document.querySelector('.button--eauth')
     this.fortmaticButton = document.querySelector('.button--fortmatic')
+    this.authereumButton = document.querySelector('.button--authereum')
 
     this.eauth = new Eauth({
       AUTH_ROUTE: '/auth',
@@ -13,6 +14,8 @@ class LoginApp {
       this.fortmaticButton.addEventListener('click', this.loginWithAuthereum.bind(this))
     if (this.fortmaticButton)
       this.fortmaticButton.addEventListener('click', this.loginWithFortmatic.bind(this))
+    if (this.authereumButton)
+      this.authereumButton.addEventListener('click', this.loginWithAuthereum.bind(this))
   }
 
   authorise() {
