@@ -6,6 +6,8 @@ const session = require('express-session')
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
 const jwt = require('jsonwebtoken')
+const fs = require('fs')
+const Keypairs = require('keypairs')
 
 // initialize sequelize with session store
 const SequelizeStore = require('connect-session-sequelize')(session.Store)
@@ -35,6 +37,23 @@ const { User, Session } = db
 
 // create database if not exist // if force == true : drop table
 async function initialize() {
+  // Initialize JWK
+  let jwk_private, jwk_public_pem
+  if (fs.existsSync('jwk_private.json') && fs.existsSync('jwk_public_pem')) {
+    jwk_private = require('./jwk_private.json')
+    jwk_public_pem = fs.readFileSync('./jwk_public_pem')
+  } else {
+    // generate a new keypair as jwk
+    // (defaults to EC P-256 when no options are specified)
+    const pair = await Keypairs.generate()
+    jwk_private = pair.private
+    jwk_public_pem = await Keypairs.export({ jwk: pair.public })
+    fs.writeFileSync('jwk_private.json', JSON.stringify(jwk_private))
+    fs.writeFileSync('jwk_public_pem', jwk_public_pem)
+  }
+  app.set('jwk_private', JSON.stringify(jwk_private))
+  app.set('jwk_public_pem', jwk_public_pem)
+
   try {
     await User.sync()
     await Session.sync({ force: true })
@@ -89,7 +108,7 @@ function apiMiddleware(req, res, next) {
   
   if (token) {
     // issue case: after server restart will pass verify cond,but token is expire, maybe should check database
-    jwt.verify(token, app.get('secret'), (err, decoded) => {
+    jwt.verify(token, app.get('jwk_public_pem'), {algorithms: ["ES256"]}, (err, decoded) => {
       if (err) {
         return res.json({ success: false, message: 'Failed to authenticate token.' })
       }

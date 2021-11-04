@@ -1,10 +1,10 @@
 const async = require('async')
 const Eauth = require('express-eauth')
-const jwt = require('jsonwebtoken')
+const Keypairs = require('keypairs')
 
 const eauthTypedDataV4 = new Eauth({ method: 'eth_signTypedData_v4', banner: process.env.EAUTH_BANNER, prefix: process.env.EAUTH_MESSAGE_PREFIX })
 
-module.exports = function(app, api, User, ens) {
+module.exports = async function(app, api, User, ens) {
   if (process.env.EAUTH_COMPONENTS_UI === 'true') {
     app.get('/', async (req, res) => {
       if (req.session.address) {
@@ -20,6 +20,14 @@ module.exports = function(app, api, User, ens) {
       } else {
         res.render('index', { isRoot: true })
       }
+    })
+
+    app.get('/.well-known/jwks.json', async (req, res) => {
+      res.json({
+        keys: [
+          await Keypairs.publish({jwk: JSON.parse(app.get('jwk_private')), exp: parseInt(process.env.EAUTH_SESSION_TIMEOUT)})
+        ]
+      })
     })
 
     app.get('/login', async (req, res) => {
@@ -60,9 +68,12 @@ module.exports = function(app, api, User, ens) {
 
     if (!address) res.status(400).send()
     else {
-      User.findOrCreate({ where: { address: address } }).spread((eauth, created) => {
-        const token = jwt.sign(eauth.get({ plain: true }), app.get('secret'), {
-          expiresIn: parseInt(process.env.EAUTH_SESSION_TIMEOUT),
+      User.findOrCreate({ where: { address: address } }).spread(async (eauth, created) => {
+        const token = await Keypairs.signJwt({
+          claims: {sub: eauth.get({ plain: true })},
+          jwk: JSON.parse(app.get('jwk_private')),
+          iss: "https://example.com",
+          exp: process.env.EAUTH_SESSION_TIMEOUT + "s"
         })
 
         req.session.cookie.expires = parseInt(process.env.EAUTH_SESSION_TIMEOUT)
